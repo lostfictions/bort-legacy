@@ -6,12 +6,15 @@ const env = envalid.cleanEnv(process.env, {
 const fs = require('fs')
 const os = require('os')
 
-function randomInArray(arr) { return arr[Math.floor(Math.random() * arr.length)] }
-
 const botkit = require('botkit')
 const moment = require('moment')
 
-const vidniteWatchlist = fs.readFileSync('data/vidnite_links.txt').toString().split('\n')
+function randomInArray(arr) { return arr[Math.floor(Math.random() * arr.length)] }
+
+const data = {
+  repo: 'https://github.com/lostfictions/bort',
+  watchlist: fs.readFileSync('data/vidnite_links.txt').toString().split('\n')
+}
 
 const controller = botkit.slackbot({
   debug: true
@@ -26,8 +29,17 @@ controller.spawn({
 })
 
 controller.hears('!vidrand', 'ambient', (bot, message) => {
-  bot.reply(message, randomInArray(vidniteWatchlist))
+  bot.reply(message, randomInArray(data.watchlist))
 })
+
+controller.hears(
+  ['where do you live', 'repo', 'home'],
+  ['direct_mention', 'mention'],
+  (bot, message) => {
+    bot.reply(message, data.repo)
+  }
+)
+
 
 controller.hears(['hello', 'hi'], ['direct_message','direct_mention','mention'], (bot, message) => {
   bot.api.reactions.add(
