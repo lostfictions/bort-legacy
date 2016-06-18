@@ -3,14 +3,15 @@
   "version": "1.0.1",
   "description": "it's bort",
   "private": true,
-  "main": "slack_bot.js",
+  "main": "main.js",
   "scripts": {
-    "start": "node --use_strict slack_bot.js"
+    "start": "node --use_strict main.js"
   },
   "author": "bort",
   "license": "ISC",
   "dependencies": {
     "botkit": "^0.2.1",
-    "envalid": "^2.2.0"
+    "envalid": "^2.2.0",
+    "moment": "^2.13.0"
   }
 }
