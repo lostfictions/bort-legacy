@@ -1,12 +1,16 @@
 {
-  "name": "openshift-cartridge-nodejs-template",
+  "name": "bort",
   "version": "1.0.1",
-  "description": "Custom Node.js cartridge for OpenShift - sample application",
+  "description": "it's bort",
   "private": true,
-  "main": "start.js",
+  "main": "slack_bot.js",
   "scripts": {
-    "start": "node --use_strict start.js"
+    "start": "node --use_strict slack_bot.js"
   },
-  "author": "Ionut-Cristian Florescu <ionut.florescu@gmail.com>",
-  "license": "ISC"
+  "author": "bort",
+  "license": "ISC",
+  "dependencies": {
+    "botkit": "^0.2.1",
+    "envalid": "^2.2.0"
+  }
 }
