@@ -17,14 +17,31 @@ const data = {
 }
 
 const controller = botkit.slackbot({
-  debug: true
+  // debug: true
 })
 
 controller.spawn({
   token: env.SLACK_TOKEN
-}).startRTM((err) => {
+}).startRTM((err, bot, payload) => {
   if(err) {
     console.error(err)
+  }
+  else {
+    const channels = payload.channels.filter(c => c.is_member && !c.is_archived)
+    channels.forEach(c => bot.say({
+      text: randomInArray([
+        "it's bort",
+        "its bort",
+        "still bort",
+        "hi im bort",
+        "bort here",
+        "it is bort",
+        "why bort",
+        "bort :(",
+        ":("
+      ]),
+      channel: c.id
+    }))
   }
 })
 
@@ -41,29 +58,33 @@ controller.hears(
 )
 
 
-controller.hears(['hello', 'hi'], ['direct_message','direct_mention','mention'], (bot, message) => {
-  bot.api.reactions.add(
-    {
-      timestamp: message.ts,
-      channel: message.channel,
-      name: 'robot_face'
-    },
-    (err, res) => {
-      if(err) {
-        bot.botkit.log('Failed to add emoji reaction :(', err)
+controller.hears(
+  ['hello', 'hi'],
+  ['direct_message','direct_mention','mention'],
+  (bot, message) => {
+    bot.api.reactions.add(
+      {
+        timestamp: message.ts,
+        channel: message.channel,
+        name: 'robot_face'
+      },
+      (err, res) => {
+        if(err) {
+          bot.botkit.log('Failed to add emoji reaction :(', err)
+        }
       }
-    }
-  )
+    )
 
-  controller.storage.users.get(message.user, (err, user) => {
-    if(user && user.name) {
-      bot.reply(message, 'Hello ' + user.name + '!!')
-    }
-    else {
-      bot.reply(message, 'Hello.')
-    }
-  })
-})
+    controller.storage.users.get(message.user, (err, user) => {
+      if(user && user.name) {
+        bot.reply(message, 'Hello ' + user.name + '!!')
+      }
+      else {
+        bot.reply(message, 'Hello.')
+      }
+    })
+  }
+)
 
 controller.hears(['call me (.*)', 'my name is (.*)'], ['direct_message','direct_mention','mention'], (bot, message) => {
   const name = message.match[1]
