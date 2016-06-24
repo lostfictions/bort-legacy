@@ -1,7 +1,8 @@
 const envalid = require('envalid')
 const env = envalid.cleanEnv(process.env, {
   SLACK_TOKEN: envalid.str(),
-  OPENSHIFT_NODEJS_PORT: envalid.num({ default: 8080 })
+  OPENSHIFT_NODEJS_PORT: envalid.num({ default: 8080 }),
+  OPENSHIFT_APP_DNS: envalid.str({ default: 'localhost' })
 })
 
 const fs = require('fs')
@@ -14,8 +15,10 @@ const app = require('express')()
 app.get('/', (req, res) => {
   res.status(200).end()
 })
-app.listen(env.OPENSHIFT_NODEJS_PORT)
-
+// app.set('hostname', env.OPENSHIFT_APP_DNS)
+// app.set('port', env.OPENSHIFT_NODEJS_PORT)
+// app.set('ipaddr', env.OPENSHIFT_NODEJS_IP)
+app.listen(env.OPENSHIFT_NODEJS_PORT, env.OPENSHIFT_APP_DNS)
 
 function randomInArray(arr) { return arr[Math.floor(Math.random() * arr.length)] }
 
