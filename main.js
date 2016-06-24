@@ -11,6 +11,9 @@ const os = require('os')
 const botkit = require('botkit')
 const moment = require('moment')
 
+const botName = 'bort'
+
+//Open a ping service so the OpenShift app doesn't idle
 const app = require('express')()
 app.get('/', (req, res) => {
   res.status(200).end()
@@ -44,7 +47,11 @@ const affirmatives = [
   'uh huh,'
 ]
 
-const bannedKeywords = ['id']
+const quips = [
+  'yeah!',
+  'word.',
+  'bort'
+]
 
 const data = {
   repo: 'https://github.com/lostfictions/bort',
@@ -70,6 +77,7 @@ controller.spawn({
   }
 })
 
+
 controller.hears('!vidrand', 'ambient', (bot, message) => {
   bot.reply(message, randomInArray(data.watchlist))
 })
@@ -81,80 +89,6 @@ controller.hears(
     bot.reply(message, data.repo)
   }
 )
-
-controller.hears(
-  ['^(.+?) is (.+)$'],
-  ['direct_mention', 'mention'],
-  (bot, message) => {
-    const keyword = message.match[1]
-    const response = message.match[2]
-
-    if(bannedKeywords.indexOf(keyword) !== -1) {
-      bot.reply(message, 'NOPE')
-      return
-    }
-
-    controller.storage.team.get(message.team, (err, teamData) => {
-      if(err) {
-        bot.botkit.log('Error retrieving team data: ', err)
-      }
-      const resolvedTeamData = teamData || {
-        id: message.team
-      }
-      resolvedTeamData[keyword] = {
-        response: response,
-        user: message.user,
-        setTime: moment()
-      }
-      controller.storage.users.save(resolvedTeamData, (err2, id) => {
-        if(err2) {
-          bot.botkit.log('Error storing user', err2)
-        }
-        bot.reply(message, `${randomInArray(confirmations)} "${keyword}" means "${response}".`)
-      })
-    })
-  }
-)
-
-/*
-controller.hears(
-  ['forget (.+?)$'],
-  ['direct_mention'],
-  (bot, message) => {
-    const keyword = message.match[1]
-
-    controller.storage.keywords.save(message.user, (err, user) => {
-      if(err) {
-        bot.botkit.log('Error retrieving user', err)
-      }
-      const resolvedUser = user || {
-        id: message.user
-      }
-      resolvedUser.name = name
-      controller.storage.users.save(resolvedUser, (err, id) => {
-        if(err) {
-          bot.botkit.log('Error storing user', err)
-        }
-        bot.reply(message, 'Got it. I will call you ' + resolvedUser.name + ' from now on.')
-      })
-    })
-
-    const payload = {
-      id: keyword,
-      response: response,
-      user: message.user,
-      setTime: moment()
-    }
-
-    controller.storage.keywords.save(payload, (err, id) => {
-      if(err) {
-        bot.botkit.log('Error storing user', err)
-      }
-      bot.reply(message, `${randomInArray(confirmations)}. "${keyword}" means "${response}"`)
-    })
-  }
-)
-*/
 
 controller.hears(
   ['hello', 'hi'],
@@ -317,24 +251,167 @@ controller.hears(
 
 
 controller.hears(
+  ['^[Ll]isten[!,] (.+?) is (.+?)$'],
+  ['direct_mention'],
+  (bot, message) => {
+    const keyword = message.match[1]
+    let response = message.match[2]
+
+    if(response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
+      response = response.slice(1, -1)
+    }
+
+    controller.storage.teams.get(message.team, (err, teamData) => {
+      if(err) {
+        bot.botkit.log('Error retrieving team data: ', err)
+      }
+      const resolvedTeamData = teamData || {
+        id: message.team,
+        responses: {},
+        listens: {}
+      }
+      resolvedTeamData.listens[keyword] = {
+        response: response,
+        user: message.user,
+        setTime: moment()
+      }
+      controller.storage.teams.save(resolvedTeamData, (err2, id) => {
+        if(err2) {
+          bot.botkit.log('Error storing user', err2)
+        }
+        bot.reply(message, `${randomInArray(confirmations)} I'll be sure to pipe up about "${keyword}".`)
+      })
+    })
+  }
+)
+
+controller.hears(
+  ['[Ll]isten[,!] [Ff]orget (.+?)$'],
+  ['direct_mention'],
+  (bot, message) => {
+    const keyword = message.match[1]
+
+    controller.storage.teams.get(message.team, (err, teamData) => {
+      if(err) {
+        bot.botkit.log('Error retrieving team data: ', err)
+      }
+
+      if(teamData && teamData.listens && teamData.listens[keyword]) {
+        delete teamData.listens[keyword]
+        controller.storage.teams.save(teamData, (err2, id) => {
+          if(err2) {
+            bot.botkit.log('Error storing team data', err2)
+          }
+          bot.reply(message, `${randomInArray(confirmations)} I can't possibly forget about "${keyword}" soon enough.`)
+        })
+      }
+      else {
+        bot.reply(message, `Never heard of ${keyword}.`)
+      }
+    })
+  }
+)
+
+controller.hears(
+  ['^(.+?) is (.+?)$'],
+  ['direct_mention'],
+  (bot, message) => {
+    const keyword = message.match[1]
+    let response = message.match[2]
+
+    if(response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
+      response = response.slice(1, -1)
+    }
+
+    controller.storage.teams.get(message.team, (err, teamData) => {
+      if(err) {
+        bot.botkit.log('Error retrieving team data: ', err)
+      }
+      const resolvedTeamData = teamData || {
+        id: message.team,
+        responses: {},
+        listens: {}        
+      }
+      resolvedTeamData.responses[keyword] = {
+        response: response,
+        user: message.user,
+        setTime: moment()
+      }
+      controller.storage.teams.save(resolvedTeamData, (err2, id) => {
+        if(err2) {
+          bot.botkit.log('Error storing user', err2)
+        }
+        bot.reply(message, `${randomInArray(confirmations)} "${keyword}" means "${response}".`)
+      })
+    })
+  }
+)
+
+controller.hears(
+  ['[Ff]orget (.+?)$'],
+  ['direct_mention'],
+  (bot, message) => {
+    const keyword = message.match[1]
+
+    controller.storage.teams.get(message.team, (err, teamData) => {
+      if(err) {
+        bot.botkit.log('Error retrieving team data: ', err)
+      }
+
+      if(teamData && teamData.responses && teamData.responses[keyword]) {
+        delete teamData.responses[keyword]
+        controller.storage.teams.save(teamData, (err2, id) => {
+          if(err2) {
+            bot.botkit.log('Error storing user', err2)
+          }
+          bot.reply(message, `${randomInArray(confirmations)} I can't possibly forget about "${keyword}" soon enough.`)
+        })
+      }
+      else {
+        bot.reply(message, `Never heard of ${keyword}.`)
+      }
+    })
+  }
+)
+
+controller.hears(
   ['^(.+?)$'],
   ['direct_mention'],
   (bot, message) => {
     const keyword = message.match[1]
 
-    if(bannedKeywords.indexOf(keyword) !== -1) {
-      return
-    }
-
-    controller.storage.team.get(message.team, (err, teamData) => {
+    controller.storage.teams.get(message.team, (err, teamData) => {
       if(err) {
         bot.botkit.log('Error retrieving team data: ', err)
+        console.log('yeah')
+        return
       }
 
-      const respData = teamData[keyword]
+      if(teamData && teamData.responses && teamData.responses[keyword]) {
+        bot.reply(message, `${randomInArray(affirmatives)} "${keyword}" is "${teamData.responses[keyword].response}".`)
+      }
+      else {
+        bot.reply(message, randomInArray(quips))
+      }
+    })
+  }
+)
 
-      if(respData) {
-        bot.reply(message, `${randomInArray(affirmatives)}. "${keyword}" is "${respData.response}".`)
+controller.hears(
+  ['^(.+?)$'],
+  ['ambient'],
+  (bot, message) => {
+    const keyword = message.match[1]
+
+    controller.storage.teams.get(message.team, (err, teamData) => {
+      if(err) {
+        bot.botkit.log('Error retrieving team data: ', err)
+        console.log('yeah')
+        return
+      }
+
+      if(teamData && teamData.listens && teamData.listens[keyword]) {
+        bot.reply(message, teamData.listens[keyword].response)
       }
     })
   }
