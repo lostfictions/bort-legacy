@@ -15,12 +15,36 @@ const app = require('express')()
 app.get('/', (req, res) => {
   res.status(200).end()
 })
-// app.set('hostname', env.OPENSHIFT_APP_DNS)
-// app.set('port', env.OPENSHIFT_NODEJS_PORT)
-// app.set('ipaddr', env.OPENSHIFT_NODEJS_IP)
 app.listen(env.OPENSHIFT_NODEJS_PORT, env.OPENSHIFT_NODEJS_IP)
 
 function randomInArray(arr) { return arr[Math.floor(Math.random() * arr.length)] }
+
+const greetz = [
+  "it's bort",
+  "its bort",
+  "still bort",
+  "hi im bort",
+  "bort here",
+  "it is bort",
+  "why bort",
+  "bort :(",
+  ":("
+]
+
+const confirmations = [
+  'ok.',
+  'awright.',
+  'got it!',
+  'i see.'
+]
+
+const affirmatives = [
+  'yeah!',
+  'word.',
+  'uh huh,'
+]
+
+const bannedKeywords = ['id']
 
 const data = {
   repo: 'https://github.com/lostfictions/bort',
@@ -40,17 +64,7 @@ controller.spawn({
   else {
     const channels = payload.channels.filter(c => c.is_member && !c.is_archived)
     channels.forEach(c => bot.say({
-      text: randomInArray([
-        "it's bort",
-        "its bort",
-        "still bort",
-        "hi im bort",
-        "bort here",
-        "it is bort",
-        "why bort",
-        "bort :(",
-        ":("
-      ]),
+      text: randomInArray(greetz),
       channel: c.id
     }))
   }
@@ -69,13 +83,78 @@ controller.hears(
 )
 
 controller.hears(
-  ['remember '],
+  ['^(.+?) is (.+)$'],
   ['direct_mention', 'mention'],
   (bot, message) => {
-    bot.reply(message, data.repo)
+    const keyword = message.match[1]
+    const response = message.match[2]
+
+    if(bannedKeywords.indexOf(keyword) !== -1) {
+      bot.reply(message, 'NOPE')
+      return
+    }
+
+    controller.storage.team.get(message.team, (err, teamData) => {
+      if(err) {
+        bot.botkit.log('Error retrieving team data: ', err)
+      }
+      const resolvedTeamData = teamData || {
+        id: message.team
+      }
+      resolvedTeamData[keyword] = {
+        response: response,
+        user: message.user,
+        setTime: moment()
+      }
+      controller.storage.users.save(resolvedTeamData, (err2, id) => {
+        if(err2) {
+          bot.botkit.log('Error storing user', err2)
+        }
+        bot.reply(message, `${randomInArray(confirmations)} "${keyword}" means "${response}".`)
+      })
+    })
   }
 )
 
+/*
+controller.hears(
+  ['forget (.+?)$'],
+  ['direct_mention'],
+  (bot, message) => {
+    const keyword = message.match[1]
+
+    controller.storage.keywords.save(message.user, (err, user) => {
+      if(err) {
+        bot.botkit.log('Error retrieving user', err)
+      }
+      const resolvedUser = user || {
+        id: message.user
+      }
+      resolvedUser.name = name
+      controller.storage.users.save(resolvedUser, (err, id) => {
+        if(err) {
+          bot.botkit.log('Error storing user', err)
+        }
+        bot.reply(message, 'Got it. I will call you ' + resolvedUser.name + ' from now on.')
+      })
+    })
+
+    const payload = {
+      id: keyword,
+      response: response,
+      user: message.user,
+      setTime: moment()
+    }
+
+    controller.storage.keywords.save(payload, (err, id) => {
+      if(err) {
+        bot.botkit.log('Error storing user', err)
+      }
+      bot.reply(message, `${randomInArray(confirmations)}. "${keyword}" means "${response}"`)
+    })
+  }
+)
+*/
 
 controller.hears(
   ['hello', 'hi'],
@@ -233,5 +312,30 @@ controller.hears(
       message,
       `:robot_face: I am a bot named <@${bot.identity.name}>. I have been running for ${uptime} on ${hostname}.`
     )
+  }
+)
+
+
+controller.hears(
+  ['^(.+?)$'],
+  ['direct_mention'],
+  (bot, message) => {
+    const keyword = message.match[1]
+
+    if(bannedKeywords.indexOf(keyword) !== -1) {
+      return
+    }
+
+    controller.storage.team.get(message.team, (err, teamData) => {
+      if(err) {
+        bot.botkit.log('Error retrieving team data: ', err)
+      }
+
+      const respData = teamData[keyword]
+
+      if(respData) {
+        bot.reply(message, `${randomInArray(affirmatives)}. "${keyword}" is "${respData.response}".`)
+      }
+    })
   }
 )
