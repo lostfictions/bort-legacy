@@ -1,6 +1,7 @@
 const envalid = require('envalid')
 const env = envalid.cleanEnv(process.env, {
-  SLACK_TOKEN: envalid.str()
+  SLACK_TOKEN: envalid.str(),
+  OPENSHIFT_NODEJS_PORT: envalid.num({ default: 8080 })
 })
 
 const fs = require('fs')
@@ -8,6 +9,13 @@ const os = require('os')
 
 const botkit = require('botkit')
 const moment = require('moment')
+
+const app = require('express')()
+app.get('/', (req, res) => {
+  res.status(200).end()
+})
+app.listen(env.OPENSHIFT_NODEJS_PORT)
+
 
 function randomInArray(arr) { return arr[Math.floor(Math.random() * arr.length)] }
 
@@ -51,6 +59,14 @@ controller.hears('!vidrand', 'ambient', (bot, message) => {
 
 controller.hears(
   ['where do you live', 'repo', 'home'],
+  ['direct_mention', 'mention'],
+  (bot, message) => {
+    bot.reply(message, data.repo)
+  }
+)
+
+controller.hears(
+  ['remember '],
   ['direct_mention', 'mention'],
   (bot, message) => {
     bot.reply(message, data.repo)
