@@ -1,15 +1,30 @@
 declare module "botkit" {
   export interface Controller {
     spawn({ token: string }) : Bot;
+    hears(patterns : string | string[], events : Event | Event[], cb : (bot : Bot, message : Message) => void)
   }
   export interface Bot {
     startRTM(callback: (error: Error, bot: Bot, payload: Botkit.Payload) => void)
   }
   export function slackbot(options?: any) : Controller;
+
+  type Message = {
+    type: 'message',
+    channel: string, // 'C1E7ZBTGT'
+    user: string, //'U1EK5EB1P'
+    text: string, //'there we go'
+    ts: string, //'1467014515.002264'
+    team: string, //'T1E7ZBT5H'
+    event: Event,
+    match: any[]
+  }
+
+  type Event = 'ambient' | 'mention' | 'direct_mention'
 }
 
 
 declare namespace Botkit {
+
   interface Payload {
     ok: boolean;
     self: Self;

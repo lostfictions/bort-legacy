@@ -2,7 +2,7 @@ const envalid = require('envalid')
 const env = envalid.cleanEnv(process.env, {
   SLACK_TOKEN: envalid.str(),
   OPENSHIFT_NODEJS_PORT: envalid.num({ default: 8080 }),
-  OPENSHIFT_NODEJS_IP: envalid.str({ default: 'localhost' }) 
+  OPENSHIFT_NODEJS_IP: envalid.str({ default: 'localhost' })
 })
 
 const fs = require('fs')
@@ -15,6 +15,7 @@ const botName = 'bort'
 
 //Open a ping service so the OpenShift app doesn't idle
 const app = require('express')()
+app.set('port', env.OPENSHIFT_NODEJS_PORT)
 app.get('/', (req, res) => {
   res.status(200).end()
 })
@@ -31,26 +32,27 @@ const greetz = [
   "it is bort",
   "why bort",
   "bort :(",
-  ":("
+  ":(",
+  "help me"
 ]
 
 const confirmations = [
   'ok.',
   'awright.',
   'got it!',
-  'i see.'
-]
-
-const affirmatives = [
-  'yeah!',
-  'word.',
-  'uh huh,'
+  'i see.',
+  'sure!',
+  'fine,',
+  'whatever, asshole.',
+  'i guess?'
 ]
 
 const quips = [
   'yeah!',
   'word.',
-  'bort'
+  'bort',
+  'bort!',
+  'bort?'
 ]
 
 const data = {
@@ -62,13 +64,16 @@ const controller = botkit.slackbot({
   // debug: true
 })
 
+const users = {}
+
 controller.spawn({
   token: env.SLACK_TOKEN
 }).startRTM((err, bot, payload) => {
-  if(err) {
+  if (err) {
     console.error(err)
   }
   else {
+    payload.users.forEach(u => users[u.id] = u.name)
     const channels = payload.channels.filter(c => c.is_member && !c.is_archived)
     channels.forEach(c => bot.say({
       text: randomInArray(greetz),
@@ -77,342 +82,158 @@ controller.spawn({
   }
 })
 
+const directListens = {}
+const ambientListens = {}
 
-controller.hears('!vidrand', 'ambient', (bot, message) => {
-  bot.reply(message, randomInArray(data.watchlist))
-})
+const listenRegex = /([\w\W]+)\s+?(?:is|equals|means)\s+?([\w\W]+)/i
 
-controller.hears(
-  ['where do you live', 'repo', 'home'],
-  ['direct_mention', 'mention'],
-  (bot, message) => {
-    bot.reply(message, data.repo)
-  }
-)
-
-controller.hears(
-  ['hello', 'hi'],
-  ['direct_message','direct_mention','mention'],
-  (bot, message) => {
-    bot.api.reactions.add(
-      {
-        timestamp: message.ts,
-        channel: message.channel,
-        name: 'robot_face'
-      },
-      (err, res) => {
-        if(err) {
-          bot.botkit.log('Failed to add emoji reaction :(', err)
-        }
-      }
-    )
-
-    controller.storage.users.get(message.user, (err, user) => {
-      if(user && user.name) {
-        bot.reply(message, 'Hello ' + user.name + '!!')
-      }
-      else {
-        bot.reply(message, 'Hello.')
-      }
-    })
-  }
-)
-
-controller.hears(['call me (.*)', 'my name is (.*)'], ['direct_message','direct_mention','mention'], (bot, message) => {
-  const name = message.match[1]
-  controller.storage.users.get(message.user, (err, user) => {
-    if(err) {
-      bot.botkit.log('Error retrieving user', err)
+const commands = {
+  remember: (b, m, t) => {
+    const matches = t.match(listenRegex)
+    if (matches === null) {
+      return
     }
-    const resolvedUser = user || {
-      id: message.user
+    const keyword = matches[1]
+    let response = matches[2]
+    if (response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
+      response = response.slice(1, -1)
     }
-    resolvedUser.name = name
-    controller.storage.users.save(resolvedUser, (err, id) => {
-      if(err) {
-        bot.botkit.log('Error storing user', err)
-      }
-      bot.reply(message, 'Got it. I will call you ' + resolvedUser.name + ' from now on.')
-    })
-  })
-})
-
-controller.hears(['what is my name', 'who am i'], 'direct_message,direct_mention,mention', (bot, message) => {
-
-  controller.storage.users.get(message.user, function (err, user) {
-    if (user && user.name) {
-      bot.reply(message, 'Your name is ' + user.name);
-    } else {
-      bot.startConversation(message, function (err, convo) {
-        if (!err) {
-          convo.say('I do not know your name yet!');
-          convo.ask('What should I call you?', function (response, convo) {
-            convo.ask('You want me to call you `' + response.text + '`?', [
-              {
-                pattern: 'yes',
-                callback: function (response, convo) {
-                  // since no further messages are queued after this,
-                  // the conversation will end naturally with status == 'completed'
-                  convo.next();
-                }
-              },
-              {
-                pattern: 'no',
-                callback: function (response, convo) {
-                  // stop the conversation. this will cause it to end with status == 'stopped'
-                  convo.stop();
-                }
-              },
-              {
-                default: true,
-                callback: function (response, convo) {
-                  convo.repeat();
-                  convo.next();
-                }
-              }
-            ]);
-
-            convo.next();
-
-          }, { 'key': 'nickname' }); // store the results in a field called nickname
-
-          convo.on('end', function (convo) {
-            if (convo.status == 'completed') {
-              bot.reply(message, 'OK! I will update my dossier...');
-
-              controller.storage.users.get(message.user, function (err, user) {
-                if (!user) {
-                  user = {
-                    id: message.user,
-                  };
-                }
-                user.name = convo.extractResponse('nickname');
-                controller.storage.users.save(user, function (err, id) {
-                  bot.reply(message, 'Got it. I will call you ' + user.name + ' from now on.');
-                });
-              });
-
-
-
-            } else {
-              // this happens if the conversation ended prematurely for some reason
-              bot.reply(message, 'OK, nevermind!');
-            }
-          });
-        }
-      });
+    directListens[keyword] = {
+      response: response,
+      user: users[m.user],
+      setTime: moment()
     }
-  });
-});
+    b.reply(m, `${randomInArray(confirmations)} if anyone asks me about *${keyword}* i'll be sure to let them know the truth.`)
+  },
 
+  listen: (b, m, t) => {
+    const matches = t.match(listenRegex)
+    if (matches === null) {
+      return
+    }
+    const keyword = matches[1]
+    let response = matches[2]
+    if (response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
+      response = response.slice(1, -1)
+    }
+    ambientListens[keyword] = {
+      response: response,
+      user: users[m.user],
+      setTime: moment()
+    }
+    b.reply(m, `${randomInArray(confirmations)} i'll let people know about *${keyword}* if i hear it.`)
+  },
 
-/*
-controller.hears(['shutdown'], 'direct_message,direct_mention,mention', function (bot, message) {
+  forget: (b, m, t) => {
+    if (t in ambientListens) {
+      delete ambientListens[t]
+      b.reply(m, `r i p ~${t}~`)
+    }
+    else if (t in directListens) {
+      delete directListens[t]
+      b.reply(m, `r i p ~${t}~`)
+    }
+  },
 
-  bot.startConversation(message, function (err, convo) {
+  list: (b, m) => b.reply(m,
+    '*ASK ME ABOUT*:\n' +
+    Object.keys(directListens).map(kw => `*${kw}*: set by *${directListens[kw].user}* ${directListens[kw].setTime.fromNow()}`).join('\n') +
+    '\n\n*IF I HEAR EM*:\n' +
+    Object.keys(ambientListens).map(kw => `*${kw}*: set by *${ambientListens[kw].user}* ${ambientListens[kw].setTime.fromNow()}`).join('\n').concat()
+  ),
 
-    convo.ask('Are you sure you want me to shutdown?', [
-      {
-        pattern: bot.utterances.yes,
-        callback: function (response, convo) {
-          convo.say('Bye!');
-          convo.next();
-          setTimeout(function () {
-            process.exit();
-          }, 3000);
-        }
-      },
-      {
-        pattern: bot.utterances.no,
-        default: true,
-        callback: function (response, convo) {
-          convo.say('*Phew!*');
-          convo.next();
-        }
-      }
-    ]);
-  });
-});
-*/
-
-controller.hears(
-  ['uptime', 'identify yourself', 'who are you', 'what is your name'],
-  ['direct_message','direct_mention','mention'],
-  (bot, message) => {
+  uptime: (b, m) => {
     const hostname = os.hostname()
     const uptime = moment.duration(process.uptime(), 'seconds').humanize()
+    b.reply(m, `hi its me <@${botName}> i have been here for *${uptime}* via \`${hostname}\``)
+  },
 
-    bot.reply(
-      message,
-      `:robot_face: I am a bot named <@${bot.identity.name}>. I have been running for ${uptime} on ${hostname}.`
-    )
-  }
-)
-
-
-controller.hears(
-  ['^[Ll]isten[!,] (.+?) is (.+?)$'],
-  ['direct_mention'],
-  (bot, message) => {
-    const keyword = message.match[1]
-    let response = message.match[2]
-
-    if(response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
-      response = response.slice(1, -1)
-    }
-
-    controller.storage.teams.get(message.team, (err, teamData) => {
-      if(err) {
-        bot.botkit.log('Error retrieving team data: ', err)
-      }
-      const resolvedTeamData = teamData || {
-        id: message.team,
-        responses: {},
-        listens: {}
-      }
-      resolvedTeamData.listens[keyword] = {
-        response: response,
-        user: message.user,
-        setTime: moment()
-      }
-      controller.storage.teams.save(resolvedTeamData, (err2, id) => {
-        if(err2) {
-          bot.botkit.log('Error storing user', err2)
-        }
-        bot.reply(message, `${randomInArray(confirmations)} I'll be sure to pipe up about "${keyword}".`)
-      })
-    })
-  }
-)
-
-controller.hears(
-  ['[Ll]isten[,!] [Ff]orget (.+?)$'],
-  ['direct_mention'],
-  (bot, message) => {
-    const keyword = message.match[1]
-
-    controller.storage.teams.get(message.team, (err, teamData) => {
-      if(err) {
-        bot.botkit.log('Error retrieving team data: ', err)
-      }
-
-      if(teamData && teamData.listens && teamData.listens[keyword]) {
-        delete teamData.listens[keyword]
-        controller.storage.teams.save(teamData, (err2, id) => {
-          if(err2) {
-            bot.botkit.log('Error storing team data', err2)
+  thing: (b, m) => b.reply(m, {
+    attachments: [
+      {
+        title: 'hello here',
+        callback_id: '123',
+        attachment_type: 'default',
+        actions: [
+          {
+            "name": "yes",
+            "text": ":waving_black_flag: Flag",
+            "value": "yes",
+            "type": "button"
+          },
+          {
+            "name": "no",
+            "text": "No",
+            "value": "no",
+            "style": "danger",
+            "type": "button"
           }
-          bot.reply(message, `${randomInArray(confirmations)} I can't possibly forget about "${keyword}" soon enough.`)
-        })
+        ]
       }
-      else {
-        bot.reply(message, `Never heard of ${keyword}.`)
-      }
-    })
-  }
-)
+    ]
+  }),
 
-controller.hears(
-  ['^(.+?) is (.+?)$'],
-  ['direct_mention'],
-  (bot, message) => {
-    const keyword = message.match[1]
-    let response = message.match[2]
+  repo: (b, m) => b.reply(m, data.repo),
 
-    if(response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
-      response = response.slice(1, -1)
-    }
+  help: (b, m) => b.reply(m, Object.keys(commands).map(c => '`' + c + '`').join(', ')),
 
-    controller.storage.teams.get(message.team, (err, teamData) => {
-      if(err) {
-        bot.botkit.log('Error retrieving team data: ', err)
-      }
-      const resolvedTeamData = teamData || {
-        id: message.team,
-        responses: {},
-        listens: {}        
-      }
-      resolvedTeamData.responses[keyword] = {
-        response: response,
-        user: message.user,
-        setTime: moment()
-      }
-      controller.storage.teams.save(resolvedTeamData, (err2, id) => {
-        if(err2) {
-          bot.botkit.log('Error storing user', err2)
-        }
-        bot.reply(message, `${randomInArray(confirmations)} "${keyword}" means "${response}".`)
-      })
-    })
-  }
-)
-
-controller.hears(
-  ['[Ff]orget (.+?)$'],
-  ['direct_mention'],
-  (bot, message) => {
-    const keyword = message.match[1]
-
-    controller.storage.teams.get(message.team, (err, teamData) => {
-      if(err) {
-        bot.botkit.log('Error retrieving team data: ', err)
-      }
-
-      if(teamData && teamData.responses && teamData.responses[keyword]) {
-        delete teamData.responses[keyword]
-        controller.storage.teams.save(teamData, (err2, id) => {
-          if(err2) {
-            bot.botkit.log('Error storing user', err2)
-          }
-          bot.reply(message, `${randomInArray(confirmations)} I can't possibly forget about "${keyword}" soon enough.`)
-        })
-      }
-      else {
-        bot.reply(message, `Never heard of ${keyword}.`)
-      }
-    })
-  }
-)
-
-controller.hears(
-  ['^(.+?)$'],
-  ['direct_mention'],
-  (bot, message) => {
-    const keyword = message.match[1]
-
-    controller.storage.teams.get(message.team, (err, teamData) => {
-      if(err) {
-        bot.botkit.log('Error retrieving team data: ', err)
-        console.log('yeah')
-        return
-      }
-
-      if(teamData && teamData.responses && teamData.responses[keyword]) {
-        bot.reply(message, `${randomInArray(affirmatives)} "${keyword}" is "${teamData.responses[keyword].response}".`)
-      }
-      else {
-        bot.reply(message, randomInArray(quips))
-      }
-    })
-  }
-)
+  '!vidrand': (b, m) => b.reply(m, randomInArray(data.watchlist))
+}
 
 controller.hears(
   ['^(.+?)$'],
   ['ambient'],
   (bot, message) => {
-    const keyword = message.match[1]
+    let text = message.text.toLowerCase()
 
-    controller.storage.teams.get(message.team, (err, teamData) => {
-      if(err) {
-        bot.botkit.log('Error retrieving team data: ', err)
-        console.log('yeah')
-        return
+    //Handle ambient listens
+    for (const l of Object.keys(ambientListens)) {
+      if (text.indexOf(l) !== -1) {
+        bot.reply(message, ambientListens[l].response)
       }
+    }
 
-      if(teamData && teamData.listens && teamData.listens[keyword]) {
-        bot.reply(message, teamData.listens[keyword].response)
+    let shouldCheckCommands = false
+    if (text.startsWith(botName)) {
+      text = text.slice(botName.length).trim()
+      shouldCheckCommands = true
+    }
+    else if (text.endsWith(botName)) {
+      text = text.slice(0, -botName.length).trim()
+      shouldCheckCommands = true
+    }
+
+    if (shouldCheckCommands) {
+      text = text.trim()
+      if (text.length > 0) {
+
+        //Handle direct listens
+        for (const l of Object.keys(directListens)) {
+          if (text.startsWith(l)) {
+            bot.reply(message, directListens[l].response)
+            return
+          }
+        }
+
+        //Handle commands
+        for (const c of Object.keys(commands)) {
+          if (text.startsWith(c)) {
+            const textMinusCommand = text.slice(c.length).trim()
+            commands[c](bot, message, textMinusCommand)
+            return
+          }
+        }
+
+        bot.reply(message, randomInArray(quips))
       }
-    })
+    }
   }
 )
+
+controller.createWebhookEndpoints(app)
+
+controller.on('interactive_message_callback', (bot, message) => {
+  console.log(message.callback_id)
+  console.log(message.actions)
+  console.dir(message)
+})
