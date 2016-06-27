@@ -1,6 +1,11 @@
+'use strict' //eslint-disable-line
+
 const envalid = require('envalid')
 const env = envalid.cleanEnv(process.env, {
   SLACK_TOKEN: envalid.str(),
+  GOOGLE_PRIVATE_KEY: envalid.str(),
+  GOOGLE_CLIENT_EMAIL: envalid.email(),
+  GOOGLE_SHEET_ID: envalid.str(),
   OPENSHIFT_NODEJS_PORT: envalid.num({ default: 8080 }),
   OPENSHIFT_NODEJS_IP: envalid.str({ default: 'localhost' })
 })
@@ -10,12 +15,10 @@ const os = require('os')
 
 const botkit = require('botkit')
 const moment = require('moment')
-
-const botName = 'bort'
+// const _ = require('lodash')
 
 //Open a ping service so the OpenShift app doesn't idle
 const app = require('express')()
-app.set('port', env.OPENSHIFT_NODEJS_PORT)
 app.get('/', (req, res) => {
   res.status(200).end()
 })
@@ -64,16 +67,19 @@ const controller = botkit.slackbot({
   // debug: true
 })
 
+let botName
+
 const users = {}
 
 controller.spawn({
   token: env.SLACK_TOKEN
 }).startRTM((err, bot, payload) => {
-  if (err) {
+  if(err) {
     console.error(err)
   }
   else {
-    payload.users.forEach(u => users[u.id] = u.name)
+    botName = payload.self.name
+    payload.users.forEach(u => users[u.id] = u.name) //eslint-disable-line no-return-assign
     const channels = payload.channels.filter(c => c.is_member && !c.is_archived)
     channels.forEach(c => bot.say({
       text: randomInArray(greetz),
@@ -82,23 +88,25 @@ controller.spawn({
   }
 })
 
-const directListens = {}
-const ambientListens = {}
+const storage = {
+  directListens: {},
+  ambientListens: {}
+}
 
 const listenRegex = /([\w\W]+)\s+?(?:is|equals|means)\s+?([\w\W]+)/i
 
-const commands = {
+const directCommands = {
   remember: (b, m, t) => {
     const matches = t.match(listenRegex)
-    if (matches === null) {
+    if(matches === null) {
       return
     }
     const keyword = matches[1]
     let response = matches[2]
-    if (response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
+    if(response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
       response = response.slice(1, -1)
     }
-    directListens[keyword] = {
+    storage.directListens[keyword] = {
       response: response,
       user: users[m.user],
       setTime: moment()
@@ -108,15 +116,15 @@ const commands = {
 
   listen: (b, m, t) => {
     const matches = t.match(listenRegex)
-    if (matches === null) {
+    if(matches === null) {
       return
     }
     const keyword = matches[1]
     let response = matches[2]
-    if (response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
+    if(response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
       response = response.slice(1, -1)
     }
-    ambientListens[keyword] = {
+    storage.ambientListens[keyword] = {
       response: response,
       user: users[m.user],
       setTime: moment()
@@ -125,21 +133,21 @@ const commands = {
   },
 
   forget: (b, m, t) => {
-    if (t in ambientListens) {
-      delete ambientListens[t]
+    if(t in storage.ambientListens) {
+      delete storage.ambientListens[t]
       b.reply(m, `r i p ~${t}~`)
     }
-    else if (t in directListens) {
-      delete directListens[t]
+    else if(t in storage.directListens) {
+      delete storage.directListens[t]
       b.reply(m, `r i p ~${t}~`)
     }
   },
 
   list: (b, m) => b.reply(m,
     '*ASK ME ABOUT*:\n' +
-    Object.keys(directListens).map(kw => `*${kw}*: set by *${directListens[kw].user}* ${directListens[kw].setTime.fromNow()}`).join('\n') +
+    Object.keys(storage.directListens).map(kw => `*${kw}*: set by *${storage.directListens[kw].user}* ${storage.directListens[kw].setTime.fromNow()}`).join('\n') +
     '\n\n*IF I HEAR EM*:\n' +
-    Object.keys(ambientListens).map(kw => `*${kw}*: set by *${ambientListens[kw].user}* ${ambientListens[kw].setTime.fromNow()}`).join('\n').concat()
+    Object.keys(storage.ambientListens).map(kw => `*${kw}*: set by *${storage.ambientListens[kw].user}* ${storage.ambientListens[kw].setTime.fromNow()}`).join('\n').concat()
   ),
 
   uptime: (b, m) => {
@@ -148,35 +156,12 @@ const commands = {
     b.reply(m, `hi its me <@${botName}> i have been here for *${uptime}* via \`${hostname}\``)
   },
 
-  thing: (b, m) => b.reply(m, {
-    attachments: [
-      {
-        title: 'hello here',
-        callback_id: '123',
-        attachment_type: 'default',
-        actions: [
-          {
-            "name": "yes",
-            "text": ":waving_black_flag: Flag",
-            "value": "yes",
-            "type": "button"
-          },
-          {
-            "name": "no",
-            "text": "No",
-            "value": "no",
-            "style": "danger",
-            "type": "button"
-          }
-        ]
-      }
-    ]
-  }),
-
   repo: (b, m) => b.reply(m, data.repo),
 
-  help: (b, m) => b.reply(m, Object.keys(commands).map(c => '`' + c + '`').join(', ')),
+  help: (b, m) => b.reply(m, Object.keys(directCommands).map(c => '`' + c + '`').join(', '))
+}
 
+const ambientCommands = {
   '!vidrand': (b, m) => b.reply(m, randomInArray(data.watchlist))
 }
 
@@ -186,54 +171,90 @@ controller.hears(
   (bot, message) => {
     let text = message.text.toLowerCase()
 
-    //Handle ambient listens
-    for (const l of Object.keys(ambientListens)) {
-      if (text.indexOf(l) !== -1) {
-        bot.reply(message, ambientListens[l].response)
+    //Handle ambient commands
+    for(const c of Object.keys(ambientCommands)) {
+      if(text.startsWith(c)) {
+        const textMinusCommand = text.slice(c.length).trim()
+        ambientCommands[c](bot, message, textMinusCommand)
+        return
       }
     }
 
-    let shouldCheckCommands = false
-    if (text.startsWith(botName)) {
-      text = text.slice(botName.length).trim()
-      shouldCheckCommands = true
-    }
-    else if (text.endsWith(botName)) {
-      text = text.slice(0, -botName.length).trim()
-      shouldCheckCommands = true
+    //Handle ambient listens
+    for(const l of Object.keys(storage.ambientListens)) {
+      if(text.indexOf(l) !== -1) {
+        bot.reply(message, storage.ambientListens[l].response)
+      }
     }
 
-    if (shouldCheckCommands) {
+    let wasMentioned = false
+    if(text.startsWith(botName)) {
+      text = text.slice(botName.length).trim()
+      wasMentioned = true
+    }
+    else if(text.endsWith(botName)) {
+      text = text.slice(0, -botName.length).trim()
+      wasMentioned = true
+    }
+
+    if(wasMentioned) {
       text = text.trim()
-      if (text.length > 0) {
+      if(text.length > 0) {
+        //Handle commands
+        for(const c of Object.keys(directCommands)) {
+          if(text.startsWith(c)) {
+            const textMinusCommand = text.slice(c.length).trim()
+            directCommands[c](bot, message, textMinusCommand)
+            return
+          }
+        }
 
         //Handle direct listens
-        for (const l of Object.keys(directListens)) {
-          if (text.startsWith(l)) {
-            bot.reply(message, directListens[l].response)
+        for(const l of Object.keys(storage.directListens)) {
+          if(text.startsWith(l)) {
+            bot.reply(message, storage.directListens[l].response)
             return
           }
         }
-
-        //Handle commands
-        for (const c of Object.keys(commands)) {
-          if (text.startsWith(c)) {
-            const textMinusCommand = text.slice(c.length).trim()
-            commands[c](bot, message, textMinusCommand)
-            return
-          }
-        }
-
-        bot.reply(message, randomInArray(quips))
       }
+
+      bot.reply(message, randomInArray(quips))
     }
   }
 )
 
-controller.createWebhookEndpoints(app)
 
-controller.on('interactive_message_callback', (bot, message) => {
-  console.log(message.callback_id)
-  console.log(message.actions)
-  console.dir(message)
+
+const GoogleSpreadsheet = require('google-spreadsheet')
+
+const doc = new GoogleSpreadsheet(env.GOOGLE_SHEET_ID)
+let sheet
+
+const credentials = {
+  client_email: env.GOOGLE_CLIENT_EMAIL,
+  private_key: env.GOOGLE_PRIVATE_KEY
+}
+
+doc.useServiceAccountAuth(credentials, () => {
+  doc.getInfo((err, info) => {
+    console.log(`Loaded doc '${info.title}' by '${info.author.email}'`)
+    console.log('Updated ' + moment(info.updated).fromNow())
+    sheet = info.worksheets[0]
+    console.log('sheet 1: '+sheet.title+' '+sheet.rowCount+'x'+sheet.colCount)
+
+    sheet.getRows((err, rows) => {
+      //{keyword: string, response: string, user: string, created: string}
+
+      // const ambientListens = {}
+      // rows.forEach(r => ambientListens[r.keyword] = {
+      //   response: r.response,
+      //   user: r.user,
+      //   created: r.created
+      // })
+
+      // rows.forEach(r => r.del(e => console.error(e)))
+      
+      // console.log('Read ' + rows.length + ' rows')
+    })
+  })
 })

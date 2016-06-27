@@ -2,6 +2,7 @@
   "name": "bort",
   "dependencies": {},
   "globalDependencies": {
+    "lodash": "registry:dt/lodash#3.10.0+20160619033623",
     "node": "registry:env/node#6.0.0+20160610031852"
   }
 }
