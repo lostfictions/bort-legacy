@@ -183,8 +183,6 @@ const directCommands = {
       .join('\n')
   ),
 
-  debug: () => { console.dir(storage); console.dir(storage.directListens) },
-
   uptime: (b, m) => {
     const hostname = os.hostname()
     const uptime = moment.duration(process.uptime(), 'seconds').humanize()
