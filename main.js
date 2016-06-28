@@ -15,9 +15,11 @@ const os = require('os')
 
 const botkit = require('botkit')
 const moment = require('moment')
-// const _ = require('lodash')
+const _ = require('lodash')
+const async = require('async')
+const GoogleSpreadsheet = require('google-spreadsheet')
 
-//Open a ping service so the OpenShift app doesn't idle
+//Open a responder we can ping (via uptimerobot.com or similar) so the OpenShift app doesn't idle
 const app = require('express')()
 app.get('/', (req, res) => {
   res.status(200).end()
@@ -58,18 +60,35 @@ const quips = [
   'bort?'
 ]
 
-const data = {
+const staticData = {
   repo: 'https://github.com/lostfictions/bort',
   watchlist: fs.readFileSync('data/vidnite_links.txt').toString().split('\n')
 }
 
+//Each storage category is keyed by the first key in the schema
+const storageSchema = {
+  directListens: {
+    keyword: true,
+    response: true,
+    user: true,
+    created: true
+  },
+  ambientListens: {
+    keyword: true,
+    response: true,
+    user: true,
+    created: true
+  }
+}
+
+const storage = {}
+
+let botName
+const users = {}
+
 const controller = botkit.slackbot({
   // debug: true
 })
-
-let botName
-
-const users = {}
 
 controller.spawn({
   token: env.SLACK_TOKEN
@@ -82,16 +101,11 @@ controller.spawn({
     payload.users.forEach(u => users[u.id] = u.name) //eslint-disable-line no-return-assign
     const channels = payload.channels.filter(c => c.is_member && !c.is_archived)
     channels.forEach(c => bot.say({
-      text: randomInArray(greetz),
+      text: randomInArray(greetz) + ' (`' + os.hostname() + '`)',
       channel: c.id
     }))
   }
 })
-
-const storage = {
-  directListens: {},
-  ambientListens: {}
-}
 
 const listenRegex = /([\w\W]+)\s+?(?:is|equals|means)\s+?([\w\W]+)/i
 
@@ -99,17 +113,24 @@ const directCommands = {
   remember: (b, m, t) => {
     const matches = t.match(listenRegex)
     if(matches === null) {
+      b.reply(m, "I CAN'T REMEMBER THIS")
       return
     }
-    const keyword = matches[1]
+    const keyword = _.trimStart(matches[1], ',.! \t').trim()
+    if(keyword.length < 1) {
+      b.reply(m, "I CAN'T REMEMBER THIS")
+      return
+    }
     let response = matches[2]
+    //FIXME: not robust sanitization!
     if(response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
       response = response.slice(1, -1)
     }
     storage.directListens[keyword] = {
+      keyword: keyword,
       response: response,
       user: users[m.user],
-      setTime: moment()
+      created: moment().toISOString()
     }
     b.reply(m, `${randomInArray(confirmations)} if anyone asks me about *${keyword}* i'll be sure to let them know the truth.`)
   },
@@ -117,17 +138,23 @@ const directCommands = {
   listen: (b, m, t) => {
     const matches = t.match(listenRegex)
     if(matches === null) {
+      b.reply(m, "I CAN'T HEAR YOU")
       return
     }
-    const keyword = matches[1]
+    const keyword = _.trimStart(matches[1], ',.! \t').trim()
+    if(keyword.length < 1) {
+      b.reply(m, "I CAN'T HEAR YOU")
+      return
+    }
     let response = matches[2]
     if(response.startsWith('<') && response.endsWith('>') && !response.startsWith('<@')) {
       response = response.slice(1, -1)
     }
     storage.ambientListens[keyword] = {
+      keyword: keyword,
       response: response,
       user: users[m.user],
-      setTime: moment()
+      created: moment().toISOString()
     }
     b.reply(m, `${randomInArray(confirmations)} i'll let people know about *${keyword}* if i hear it.`)
   },
@@ -145,10 +172,18 @@ const directCommands = {
 
   list: (b, m) => b.reply(m,
     '*ASK ME ABOUT*:\n' +
-    Object.keys(storage.directListens).map(kw => `*${kw}*: set by *${storage.directListens[kw].user}* ${storage.directListens[kw].setTime.fromNow()}`).join('\n') +
+    Object.keys(storage.directListens)
+      .map(kw =>
+        `*${kw}*: set by *${storage.directListens[kw].user}* ${moment(storage.directListens[kw].created).fromNow()}`)
+      .join('\n') +
     '\n\n*IF I HEAR EM*:\n' +
-    Object.keys(storage.ambientListens).map(kw => `*${kw}*: set by *${storage.ambientListens[kw].user}* ${storage.ambientListens[kw].setTime.fromNow()}`).join('\n').concat()
+    Object.keys(storage.ambientListens)
+      .map(kw =>
+        `*${kw}*: set by *${storage.ambientListens[kw].user}* ${moment(storage.ambientListens[kw].created).fromNow()}`)
+      .join('\n')
   ),
+
+  debug: () => { console.dir(storage); console.dir(storage.directListens) },
 
   uptime: (b, m) => {
     const hostname = os.hostname()
@@ -156,13 +191,13 @@ const directCommands = {
     b.reply(m, `hi its me <@${botName}> i have been here for *${uptime}* via \`${hostname}\``)
   },
 
-  repo: (b, m) => b.reply(m, data.repo),
+  repo: (b, m) => b.reply(m, staticData.repo),
 
   help: (b, m) => b.reply(m, Object.keys(directCommands).map(c => '`' + c + '`').join(', '))
 }
 
 const ambientCommands = {
-  '!vidrand': (b, m) => b.reply(m, randomInArray(data.watchlist))
+  '!vidrand': (b, m) => b.reply(m, randomInArray(staticData.watchlist))
 }
 
 controller.hears(
@@ -224,9 +259,6 @@ controller.hears(
 )
 
 
-
-const GoogleSpreadsheet = require('google-spreadsheet')
-
 const doc = new GoogleSpreadsheet(env.GOOGLE_SHEET_ID)
 let sheet
 
@@ -237,24 +269,81 @@ const credentials = {
 
 doc.useServiceAccountAuth(credentials, () => {
   doc.getInfo((err, info) => {
-    console.log(`Loaded doc '${info.title}' by '${info.author.email}'`)
-    console.log('Updated ' + moment(info.updated).fromNow())
-    sheet = info.worksheets[0]
-    console.log('sheet 1: '+sheet.title+' '+sheet.rowCount+'x'+sheet.colCount)
-
-    sheet.getRows((err, rows) => {
-      //{keyword: string, response: string, user: string, created: string}
-
-      // const ambientListens = {}
-      // rows.forEach(r => ambientListens[r.keyword] = {
-      //   response: r.response,
-      //   user: r.user,
-      //   created: r.created
-      // })
-
-      // rows.forEach(r => r.del(e => console.error(e)))
-      
-      // console.log('Read ' + rows.length + ' rows')
-    })
+    if(err) {
+      console.error(err)
+    }
+    else {
+      sheet = info
+      retrieveData()
+    }
   })
 })
+
+function retrieveData() {
+  for(const category of Object.keys(storageSchema)) {
+    const categoryKeys = Object.keys(storageSchema[category])
+
+    const worksheet = sheet.worksheets.find(w => w.title === category)
+    if(worksheet == null) {
+      console.error(`Can't get worksheet '${category}'! Creating it.`)
+      sheet.addWorksheet(
+        {
+          title: category,
+          rowCount: 5, //needs some padding, api forbids deleting all rows
+          colCount: categoryKeys.length,
+          headers: categoryKeys
+        },
+        e => { if(e) { console.error('Error creating new worksheet for ' + category + ': ' + e) } }
+      )
+    }
+    else {
+      worksheet.getRows((err, rows) => {
+        storage[category] = {}
+        rows.forEach(r => {
+          //Index each storage category by the first key in the schema
+          const index = r[categoryKeys[0]]
+          storage[category][index] = {}
+          categoryKeys.forEach(k => { storage[category][index][k] = r[k] })
+        })
+      })
+    }
+  }
+}
+
+function saveData() {
+  async.series(
+    Object.keys(storage).map(category => {
+      return function(outercb) {
+        const worksheet = sheet.worksheets.find(w => w.title === category)
+        if(worksheet == null) {
+          outercb(`Can't get worksheet '${category}'`)
+          return
+        }
+        async.waterfall(
+          [
+            (cb) => worksheet.getRows(cb),
+            (rows, cb) => async.parallelLimit(rows.map(r => r.del), 2, e => cb(e)),
+            (cb) => async.parallelLimit(
+              Object.keys(storage[category]).map(k =>
+                worksheet.addRow.bind(undefined, _.pick(storage[category][k], Object.keys(storageSchema[category])))
+              ),
+              2,
+              cb
+            )
+          ],
+          outercb
+        )
+      }
+    }),
+    (err) => {
+      if(err) {
+        console.error(err)
+      }
+      else {
+        console.log('Saved to Sheets successfully at ' + moment().format('dddd, MMMM Do YYYY, h:mm:ss a'))
+      }
+    }
+  )
+}
+
+setInterval(saveData, moment.duration(10, 'minutes').asMilliseconds())
