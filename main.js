@@ -19,6 +19,10 @@ const _ = require('lodash')
 const async = require('async')
 const GoogleSpreadsheet = require('google-spreadsheet')
 
+const Markov = require('./Markov')
+
+const convoMarkov = new Markov()
+
 //Open a responder we can ping (via uptimerobot.com or similar) so the OpenShift app doesn't idle
 const app = require('express')()
 app.get('/', (req, res) => {
@@ -204,6 +208,8 @@ controller.hears(
   (bot, message) => {
     let text = message.text.toLowerCase()
 
+    convoMarkov.add(text)
+
     //Handle ambient commands
     for(const c of Object.keys(ambientCommands)) {
       if(text.startsWith(c)) {
@@ -220,23 +226,23 @@ controller.hears(
       }
     }
 
-    let wasMentioned = false
+    let shouldCheckCommandsAndListens = false
+    let textMinusBot
     if(text.startsWith(botName)) {
-      text = text.slice(botName.length).trim()
-      wasMentioned = true
+      textMinusBot = text.slice(botName.length).trim()
+      shouldCheckCommandsAndListens = true
     }
     else if(text.endsWith(botName)) {
-      text = text.slice(0, -botName.length).trim()
-      wasMentioned = true
+      textMinusBot = text.slice(0, -botName.length).trim()
+      shouldCheckCommandsAndListens = true
     }
 
-    if(wasMentioned) {
-      text = text.trim()
-      if(text.length > 0) {
+    if(shouldCheckCommandsAndListens) {
+      if(textMinusBot.length > 0) {
         //Handle commands
         for(const c of Object.keys(directCommands)) {
-          if(text.startsWith(c)) {
-            const textMinusCommand = text.slice(c.length).trim()
+          if(textMinusBot.startsWith(c)) {
+            const textMinusCommand = textMinusBot.slice(c.length).trim()
             directCommands[c](bot, message, textMinusCommand)
             return
           }
@@ -244,18 +250,30 @@ controller.hears(
 
         //Handle direct listens
         for(const l of Object.keys(storage.directListens)) {
-          if(text.startsWith(l)) {
+          if(textMinusBot.startsWith(l)) {
             bot.reply(message, storage.directListens[l].response)
             return
           }
         }
       }
+    }
 
-      bot.reply(message, randomInArray(quips))
+    if(text.indexOf(botName) !== -1) {
+      const words = text.split(' ')
+      let reply = convoMarkov.get(words[words.length - 1])
+      if(reply.length === 0) {
+        reply = convoMarkov.get()
+      }
+      if(reply.length === 0) {
+        reply = randomInArray(quips)
+      }
+      bot.reply(message, reply)
     }
   }
 )
 
+
+//TODO: split saving/loading off into separate module maybe
 
 const doc = new GoogleSpreadsheet(env.GOOGLE_SHEET_ID)
 let sheet
@@ -345,3 +363,38 @@ function saveData() {
 }
 
 setInterval(saveData, moment.duration(10, 'minutes').asMilliseconds())
+
+setInterval(() => console.log(convoMarkov.dump()), moment.duration(10, 'minutes').asMilliseconds())
+
+
+/*
+ * Pass an array of tuples like [['dog', 1],['cat', 2]] and it'll
+ * return you a function that, when called, will give you a random
+ * value based on the given weights (eg. 'dog' 1 time out of 3,
+ * 'cat' 2 times out of 3)
+ */
+// function makeWeightedGetter(weights) {
+//   const totalWeight = weights.reduce((p, c) => p + c[1], 0)
+
+//   let lastWeight = 0
+//   for(let i=0; i<weights.length; i++) {
+//     const w = weights[i]
+//     w[1] = w[1] / totalWeight + lastWeight
+//     lastWeight = w[1]
+//   }
+
+//   //Set the final weight to exactly one
+//   weights[weights.length-1][1] = 1
+
+//   return () => {
+//     const rr = Math.random()
+//     for(let i=0; i<weights.length; i++) {
+//       const w = weights[i]
+//       if(rr < w[1]) {
+//         return w[0]
+//       }
+//     }
+//     throw new Error('We goofed!')
+//   }
+// }
+
