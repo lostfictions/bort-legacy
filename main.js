@@ -190,7 +190,11 @@ const directCommands = {
 
     const words = originalPhrase.split(' ')
 
-    const newPhraseSeed = convoMarkov.get()
+    let newPhraseSeed = convoMarkov.get()
+    if(newPhraseSeed.length === 0) {
+      newPhraseSeed = randomInArray(greetz.concat(confirmations).concat(quips))
+    }
+
     const newWords = newPhraseSeed.split(' ')
 
     let rhymes
