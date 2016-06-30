@@ -10,7 +10,7 @@ function randomByWeight(weights) {
   if (!Number.isFinite(sum)) {
     throw new Error("All values in object must be a numeric value")
   }
-  const choose = ~~(Math.random() * sum)
+  const choose = Math.floor(Math.random() * sum)
   for (let i = 0, count = 0; i < keys.length; i++) {
     count += weights[keys[i]]
     if (count > choose) {
@@ -31,6 +31,31 @@ const prepositions = [
   'vis-a-vis', 'thru', 'till', 'versus', 'without', 'w/o', 'o\'', 'a\''
 ]
 
+const determiners = [
+  'this', 'any', 'enough', 'each', 'whatever', 'every', 'these', 'another',
+  'plenty', 'whichever', 'neither', 'an', 'a', 'least', 'own', 'few', 'both',
+  'those', 'the', 'that', 'various', 'either', 'much', 'some', 'else', 'no',
+  'la', 'le', 'les', 'des', 'de', 'du', 'el'
+]
+
+const conjunctions = [
+  'yet', 'therefore', 'or', 'while', 'nor', 'whether',
+  'though', 'because', 'cuz', 'but', 'for', 'and', 'however', 'before',
+  'although', 'how', 'plus', 'versus', 'not' ]
+
+const misc = [
+  'if', 'unless', 'otherwise', 'notwithstanding', 'said', 'had',
+  'been', 'began', 'came', 'did', 'meant', 'went', 'is', 'will be', 'are', 'was',
+  'were', 'am', 'isn\'t', 'ain\'t', 'aren\'t', 'can', 'may', 'could', 'might',
+  'will', 'ought to', 'would', 'must', 'shall', 'should', 'ought', 'shant',
+  'lets', 'his', 'her', 'my', 'their', 'yours', 'your', 'our', 'its', 'it',
+  'they', 'i', 'them', 'you', 'she', 'me', 'he', 'him', 'ourselves', 'us', 'we',
+  'thou', 'il', 'elle', 'yourself', '\'em', 'he\'s', 'she\'s', 'where', 'why',
+  'when', 'who', 'whom', 'whose', 'what', 'which'
+]
+
+const continueSet = new Set(prepositions.concat(determiners).concat(conjunctions).concat(misc))
+
 class MarkovChain {
   constructor(contents, normalizer = (word) => word.replace(/\.$/ig, '')) {
     this.wordBank = {}
@@ -44,7 +69,7 @@ class MarkovChain {
   }
 
   endTest(sentence) {
-    return sentence.length > 7 && prepositions.indexOf(sentence[sentence.length - 1]) === -1
+    return sentence.length > 7 && !continueSet.has(sentence[sentence.length - 1]) && Math.random() > 0.7
   }
 
   get(seed = this.getSeed(this.wordBank)) {
@@ -108,7 +133,7 @@ class MarkovChain {
       this.endTest = () => this.sentence.split(' ').slice(-1)[0] === functionOrStringOrNumber
     }
     else if (typeof functionOrStringOrNumber === 'number' || functionOrStringOrNumber == null) {
-      functionOrStringOrNumber = functionOrStringOrNumber || Infinity
+      functionOrStringOrNumber = functionOrStringOrNumber || Infinity //eslint-disable-line no-param-reassign
       this.endTest = () => this.sentence.split(' ').length > functionOrStringOrNumber
     }
     else {

@@ -203,12 +203,10 @@ const ambientCommands = {
 }
 
 controller.hears(
-  ['^(.+?)$'],
+  [/^(.+?)$/mig],
   ['ambient'],
   (bot, message) => {
     let text = message.text.toLowerCase()
-
-    convoMarkov.add(text)
 
     //Handle ambient commands
     for(const c of Object.keys(ambientCommands)) {
@@ -258,9 +256,19 @@ controller.hears(
       }
     }
 
+    convoMarkov.add(text)
+
     if(text.indexOf(botName) !== -1) {
       const words = text.split(' ')
-      let reply = convoMarkov.get(words[words.length - 1])
+
+      let reply = ''
+
+      // only use a word from what we heard as seed if
+      // we heard something more than the bot name
+      if(words.length > 1) {
+        reply = convoMarkov.get(words[words.length - 1])
+      }
+
       if(reply.length === 0) {
         reply = convoMarkov.get()
       }
@@ -364,7 +372,7 @@ function saveData() {
 
 setInterval(saveData, moment.duration(10, 'minutes').asMilliseconds())
 
-setInterval(() => console.log(convoMarkov.dump()), moment.duration(10, 'minutes').asMilliseconds())
+//setInterval(() => console.log(convoMarkov.dump()), moment.duration(10, 'minutes').asMilliseconds())
 
 
 /*
