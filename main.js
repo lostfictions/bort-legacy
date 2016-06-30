@@ -18,6 +18,8 @@ const moment = require('moment')
 const _ = require('lodash')
 const async = require('async')
 const GoogleSpreadsheet = require('google-spreadsheet')
+const syllable = require('syllable')
+const pronouncing = require('pronouncing')
 
 const Markov = require('./Markov')
 
@@ -174,6 +176,53 @@ const directCommands = {
     }
   },
 
+  rhyme: (b, m, t) => {
+    let originalPhrase = t
+    let includeOriginalPhrase = false
+
+    if(originalPhrase.length === 0) {
+      originalPhrase = convoMarkov.get()
+      if(originalPhrase.length === 0) {
+        originalPhrase = randomInArray(greetz.concat(confirmations).concat(quips))
+      }
+      includeOriginalPhrase = true
+    }
+
+    const words = originalPhrase.split(' ')
+
+    const newPhraseSeed = convoMarkov.get()
+    const newWords = newPhraseSeed.split(' ')
+
+    let rhymes
+    let i
+    for(i = words.length - 1; i >= 0; i--) {
+      rhymes = pronouncing.rhymes(words[i])
+      if(rhymes.length > 0) {
+        break
+      }
+    }
+
+    if(rhymes.length === 0) {
+      b.reply(m, randomInArray(["can't do it / so screw it", "i choked :(", "rap sucks", "go fucking read a sonnet"]))
+      return
+    }
+
+    const syllableCount = syllable(words[i])
+    const rhymesSameSyllableCount = rhymes.filter(r => syllable(r) === syllableCount)
+    if(rhymesSameSyllableCount.length > 0) {
+      newWords[newWords.length - 1] = randomInArray(rhymesSameSyllableCount)
+    }
+    else {
+      newWords[newWords.length - 1] = randomInArray(rhymes)
+    }
+
+    let reply = newWords.join(' ')
+    if(includeOriginalPhrase) {
+      reply = originalPhrase + ' / ' + reply
+    }
+    b.reply(m, reply)
+  },
+
   list: (b, m) => b.reply(m,
     '*ASK ME ABOUT*:\n' +
     Object.keys(storage.directListens)
@@ -206,7 +255,7 @@ controller.hears(
   [/^(.+?)$/mig],
   ['ambient'],
   (bot, message) => {
-    let text = message.text.toLowerCase()
+    const text = message.text.toLowerCase()
 
     //Handle ambient commands
     for(const c of Object.keys(ambientCommands)) {
@@ -217,10 +266,12 @@ controller.hears(
       }
     }
 
+    let didReply = false
     //Handle ambient listens
     for(const l of Object.keys(storage.ambientListens)) {
       if(text.indexOf(l) !== -1) {
         bot.reply(message, storage.ambientListens[l].response)
+        didReply = true
       }
     }
 
@@ -258,7 +309,9 @@ controller.hears(
 
     convoMarkov.add(text)
 
-    if(text.indexOf(botName) !== -1) {
+    //if the bot already replied to one or more ambient listens,
+    //don't bother seeing if we need to try to write more
+    if(!didReply && text.indexOf(botName) !== -1) {
       const words = text.split(' ')
 
       let reply = ''
@@ -266,6 +319,10 @@ controller.hears(
       // only use a word from what we heard as seed if
       // we heard something more than the bot name
       if(words.length > 1) {
+        if(Math.random() < 0.1) {
+          directCommands.rhyme(bot, message, text)
+          return
+        }
         reply = convoMarkov.get(words[words.length - 1])
       }
 
