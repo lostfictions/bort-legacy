@@ -66,9 +66,39 @@ const quips = [
   'bort?'
 ]
 
+const interjections = [
+  'gosh',
+  'dang',
+  'man',
+  'jeez louise',
+  'oh boy',
+  'phew'
+]
+
+const vidlines = {
+  "i'm just so tired of": {
+    singular: "this",
+    plural: "these",
+    indefinite: "",
+    adjecting: "being"
+  },
+  "i'm pretty excited to finally": {
+    singular: "find that",
+    plural: "find those",
+    indefinite: "stop",
+    adjecting: "get"
+  }
+}
+
+
 const staticData = {
   repo: 'https://github.com/lostfictions/bort',
-  watchlist: fs.readFileSync('data/vidnite_links.txt').toString().split('\n')
+  watchlist: fs.readFileSync('data/vidnite_links.txt').toString().split('\n'),
+  watched: require('./data/watched.json'),
+  vidlineVids: {}
+}
+for(const type of Object.keys(staticData.watched)) {
+  staticData.watched[type].forEach(vid => { staticData.vidlineVids[vid] = type })
 }
 
 //Each storage category is keyed by the first key in the schema
@@ -252,7 +282,14 @@ const directCommands = {
 }
 
 const ambientCommands = {
-  '!vidrand': (b, m) => b.reply(m, randomInArray(staticData.watchlist))
+  '!vidrand': (b, m) => b.reply(m, randomInArray(staticData.watchlist)),
+  '!vidline': (b, m) => {
+    const int = randomInArray(interjections)
+    const line = randomInArray(Object.keys(vidlines))
+    const vid = randomInArray(Object.keys(staticData.vidlineVids))
+    const joiner = vidlines[line][staticData.vidlineVids[vid]]
+    b.reply(m, `${int}, ${line} ${joiner} ${vid}`)
+  }
 }
 
 controller.hears(

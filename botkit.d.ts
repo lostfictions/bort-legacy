@@ -1,10 +1,12 @@
 declare module "botkit" {
   export interface Controller {
     spawn({ token: string }) : Bot;
-    hears(patterns : string | string[], events : Event | Event[], cb : (bot : Bot, message : Message) => void)
+    hears(patterns : (string | RegExp)[] | string | RegExp, events : Event | Event[], cb : (bot : Bot, message : Message) => void)
   }
   export interface Bot {
     startRTM(callback: (error: Error, bot: Bot, payload: Botkit.Payload) => void)
+    say(options : { text: string, channel: string }) : void
+    reply(message : Message, text : string)
   }
   export function slackbot(options?: any) : Controller;
 
