@@ -7,7 +7,8 @@ const env = envalid.cleanEnv(process.env, {
   GOOGLE_CLIENT_EMAIL: envalid.email(),
   GOOGLE_SHEET_ID: envalid.str(),
   OPENSHIFT_NODEJS_PORT: envalid.num({ default: 8080 }),
-  OPENSHIFT_NODEJS_IP: envalid.str({ default: 'localhost' })
+  OPENSHIFT_NODEJS_IP: envalid.str({ default: 'localhost' }),
+  SLASH_VERIFICATION_TOKEN: envalid.str()
 })
 
 const fs = require('fs')
@@ -292,6 +293,24 @@ const ambientCommands = {
   }
 }
 
+controller.on('slash_command', function(bot, message) {
+  if(message.command === "/i") {
+    if(message.token !== env.SLASH_VERIFICATION_TOKEN) {
+      console.warn(`Invalid verification token on request: ${message.token}`)
+      return
+    }
+    if(message.text === "") {
+      bot.replyPrivate(
+        message,
+        "You need to tell me what you're doing!"
+      )
+      return
+    }
+
+    bot.replyPublic(message, `*${message.user}* _${message.text}_`)
+  }
+})
+
 controller.hears(
   [/^(.+?)$/mig],
   ['ambient'],
@@ -381,94 +400,94 @@ controller.hears(
 
 //TODO: split saving/loading off into separate module maybe
 
-const doc = new GoogleSpreadsheet(env.GOOGLE_SHEET_ID)
-let sheet
+// const doc = new GoogleSpreadsheet(env.GOOGLE_SHEET_ID)
+// let sheet
 
-const credentials = {
-  client_email: env.GOOGLE_CLIENT_EMAIL,
-  private_key: env.GOOGLE_PRIVATE_KEY
-}
+// const credentials = {
+//   client_email: env.GOOGLE_CLIENT_EMAIL,
+//   private_key: env.GOOGLE_PRIVATE_KEY
+// }
 
-doc.useServiceAccountAuth(credentials, () => {
-  doc.getInfo((err, info) => {
-    if(err) {
-      console.error(err)
-    }
-    else {
-      sheet = info
-      retrieveData()
-    }
-  })
-})
+// doc.useServiceAccountAuth(credentials, () => {
+//   doc.getInfo((err, info) => {
+//     if(err) {
+//       console.error(err)
+//     }
+//     else {
+//       sheet = info
+//       retrieveData()
+//     }
+//   })
+// })
 
-function retrieveData() {
-  for(const category of Object.keys(storageSchema)) {
-    const categoryKeys = Object.keys(storageSchema[category])
+// function retrieveData() {
+//   for(const category of Object.keys(storageSchema)) {
+//     const categoryKeys = Object.keys(storageSchema[category])
 
-    const worksheet = sheet.worksheets.find(w => w.title === category)
-    if(worksheet == null) {
-      console.error(`Can't get worksheet '${category}'! Creating it.`)
-      sheet.addWorksheet(
-        {
-          title: category,
-          rowCount: 5, //needs some padding, api forbids deleting all rows
-          colCount: categoryKeys.length,
-          headers: categoryKeys
-        },
-        e => { if(e) { console.error('Error creating new worksheet for ' + category + ': ' + e) } }
-      )
-    }
-    else {
-      worksheet.getRows((err, rows) => {
-        storage[category] = {}
-        rows.forEach(r => {
-          //Index each storage category by the first key in the schema
-          const index = r[categoryKeys[0]]
-          storage[category][index] = {}
-          categoryKeys.forEach(k => { storage[category][index][k] = r[k] })
-        })
-      })
-    }
-  }
-}
+//     const worksheet = sheet.worksheets.find(w => w.title === category)
+//     if(worksheet == null) {
+//       console.error(`Can't get worksheet '${category}'! Creating it.`)
+//       sheet.addWorksheet(
+//         {
+//           title: category,
+//           rowCount: 5, //needs some padding, api forbids deleting all rows
+//           colCount: categoryKeys.length,
+//           headers: categoryKeys
+//         },
+//         e => { if(e) { console.error('Error creating new worksheet for ' + category + ': ' + e) } }
+//       )
+//     }
+//     else {
+//       worksheet.getRows((err, rows) => {
+//         storage[category] = {}
+//         rows.forEach(r => {
+//           //Index each storage category by the first key in the schema
+//           const index = r[categoryKeys[0]]
+//           storage[category][index] = {}
+//           categoryKeys.forEach(k => { storage[category][index][k] = r[k] })
+//         })
+//       })
+//     }
+//   }
+// }
 
-function saveData() {
-  async.series(
-    Object.keys(storage).map(category => {
-      return function(outercb) {
-        const worksheet = sheet.worksheets.find(w => w.title === category)
-        if(worksheet == null) {
-          outercb(`Can't get worksheet '${category}'`)
-          return
-        }
-        async.waterfall(
-          [
-            (cb) => worksheet.getRows(cb),
-            (rows, cb) => async.parallelLimit(rows.map(r => r.del), 2, e => cb(e)),
-            (cb) => async.parallelLimit(
-              Object.keys(storage[category]).map(k =>
-                worksheet.addRow.bind(undefined, _.pick(storage[category][k], Object.keys(storageSchema[category])))
-              ),
-              2,
-              cb
-            )
-          ],
-          outercb
-        )
-      }
-    }),
-    (err) => {
-      if(err) {
-        console.error(err)
-      }
-      else {
-        console.log('Saved to Sheets successfully at ' + moment().format('dddd, MMMM Do YYYY, h:mm:ss a'))
-      }
-    }
-  )
-}
+// function saveData() {
+//   async.series(
+//     Object.keys(storage).map(category => {
+//       return function(outercb) {
+//         const worksheet = sheet.worksheets.find(w => w.title === category)
+//         if(worksheet == null) {
+//           outercb(`Can't get worksheet '${category}'`)
+//           return
+//         }
+//         async.waterfall(
+//           [
+//             (cb) => worksheet.getRows(cb),
+//             (rows, cb) => async.parallelLimit(rows.map(r => r.del), 2, e => cb(e)),
+//             (cb) => async.parallelLimit(
+//               Object.keys(storage[category]).map(k =>
+//                 worksheet.addRow.bind(undefined, _.pick(storage[category][k], Object.keys(storageSchema[category])))
+//               ),
+//               2,
+//               cb
+//             )
+//           ],
+//           outercb
+//         )
+//       }
+//     }),
+//     (err) => {
+//       if(err) {
+//         console.error(err)
+//       }
+//       else {
+//         console.log('Saved to Sheets successfully at ' + moment().format('dddd, MMMM Do YYYY, h:mm:ss a'))
+//       }
+//     }
+//   )
+// }
 
-setInterval(saveData, moment.duration(10, 'minutes').asMilliseconds())
+// setInterval(saveData, moment.duration(10, 'minutes').asMilliseconds())
 
 //setInterval(() => console.log(convoMarkov.dump()), moment.duration(10, 'minutes').asMilliseconds())
 
