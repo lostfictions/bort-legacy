@@ -3,9 +3,11 @@
 const envalid = require('envalid')
 const env = envalid.cleanEnv(process.env, {
   SLACK_TOKEN: envalid.str(),
-  GOOGLE_PRIVATE_KEY: envalid.str(),
-  GOOGLE_CLIENT_EMAIL: envalid.email(),
-  GOOGLE_SHEET_ID: envalid.str(),
+  SLACK_CLIENT_ID: envalid.str(),
+  SLACK_CLIENT_SECRET: envalid.str(),
+  // GOOGLE_PRIVATE_KEY: envalid.str(),
+  // GOOGLE_CLIENT_EMAIL: envalid.email(),
+  // GOOGLE_SHEET_ID: envalid.str(),
   OPENSHIFT_NODEJS_PORT: envalid.num({ default: 8080 }),
   OPENSHIFT_NODEJS_IP: envalid.str({ default: 'localhost' }),
   SLASH_VERIFICATION_TOKEN: envalid.str()
@@ -126,6 +128,10 @@ const users = {}
 
 const controller = botkit.slackbot({
   // debug: true
+}).configureSlackApp({
+  clientId: env.SLACK_CLIENT_ID,
+  clientSecret: env.SLACK_CLIENT_SECRET,
+  scopes: ['commands']
 })
 
 controller.spawn({
@@ -142,6 +148,7 @@ controller.spawn({
       text: randomInArray(greetz) + ' (`' + os.hostname() + '`)',
       channel: c.id
     }))
+
 
     controller.createWebhookEndpoints(app)
     controller.createOauthEndpoints(app, function(err2, req, res) {
