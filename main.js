@@ -259,12 +259,12 @@ const directCommands = {
 
   list: (b, m) => b.reply(m,
     '*ASK ME ABOUT*:\n' +
-    Object.keys(storage.directListens)
+    Object.keys(storage.directListens || {})
       .map(kw =>
         `*${kw}*: set by *${storage.directListens[kw].user}* ${moment(storage.directListens[kw].created).fromNow()}`)
       .join('\n') +
     '\n\n*IF I HEAR EM*:\n' +
-    Object.keys(storage.ambientListens)
+    Object.keys(storage.ambientListens || {})
       .map(kw =>
         `*${kw}*: set by *${storage.ambientListens[kw].user}* ${moment(storage.ambientListens[kw].created).fromNow()}`)
       .join('\n')
