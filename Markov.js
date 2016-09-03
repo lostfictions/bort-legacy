@@ -44,14 +44,7 @@ const conjunctions = [
   'although', 'how', 'plus', 'versus', 'not' ]
 
 const misc = [
-  'if', 'unless', 'otherwise', 'notwithstanding', 'said', 'had',
-  'been', 'began', 'came', 'did', 'meant', 'went', 'is', 'will be', 'are', 'was',
-  'were', 'am', 'isn\'t', 'ain\'t', 'aren\'t', 'can', 'may', 'could', 'might',
-  'will', 'ought to', 'would', 'must', 'shall', 'should', 'ought', 'shant',
-  'lets', 'his', 'her', 'my', 'their', 'yours', 'your', 'our', 'its', 'it',
-  'they', 'i', 'them', 'you', 'she', 'me', 'he', 'him', 'ourselves', 'us', 'we',
-  'thou', 'il', 'elle', 'yourself', '\'em', 'he\'s', 'she\'s', 'where', 'why',
-  'when', 'who', 'whom', 'whose', 'what', 'which'
+  'if', 'unless', 'otherwise'
 ]
 
 const continueSet = new Set(prepositions.concat(determiners).concat(conjunctions).concat(misc))

@@ -17,8 +17,8 @@ const os = require('os')
 const botkit = require('botkit')
 const moment = require('moment')
 const _ = require('lodash')
-const async = require('async')
-const GoogleSpreadsheet = require('google-spreadsheet')
+// const async = require('async')
+// const GoogleSpreadsheet = require('google-spreadsheet')
 const syllable = require('syllable')
 const pronouncing = require('pronouncing')
 
@@ -32,6 +32,7 @@ app.get('/', (req, res) => {
   res.status(200).end()
 })
 app.listen(env.OPENSHIFT_NODEJS_PORT, env.OPENSHIFT_NODEJS_IP)
+
 
 function randomInArray(arr) { return arr[Math.floor(Math.random() * arr.length)] }
 
@@ -54,9 +55,9 @@ const confirmations = [
   'got it!',
   'i see.',
   'sure!',
-  'fine,',
-  'whatever, asshole.',
-  'i guess?'
+  'fine,'
+  // 'whatever, asshole.',
+  // 'i guess?'
 ]
 
 const quips = [
@@ -98,7 +99,7 @@ const staticData = {
   watched: require('./data/watched.json'),
   vidlineVids: {}
 }
-for(const type of Object.keys(staticData.watched)) {
+for(const type of Object.keys(staticData.watched || {})) {
   staticData.watched[type].forEach(vid => { staticData.vidlineVids[vid] = type })
 }
 
@@ -141,6 +142,16 @@ controller.spawn({
       text: randomInArray(greetz) + ' (`' + os.hostname() + '`)',
       channel: c.id
     }))
+  }
+})
+
+controller.createWebhookEndpoints(app)
+controller.createOauthEndpoints(app, function(err, req, res) {
+  if(err) {
+    res.status(500).send('ERROR: ' + err)
+  }
+  else {
+    res.send('Success!')
   }
 })
 
@@ -238,7 +249,7 @@ const directCommands = {
     }
 
     if(rhymes.length === 0) {
-      b.reply(m, randomInArray(["can't do it / so screw it", "i choked :(", "rap sucks", "go fucking read a sonnet"]))
+      b.reply(m, randomInArray(["i choked :("]))
       return
     }
 
@@ -279,7 +290,7 @@ const directCommands = {
 
   repo: (b, m) => b.reply(m, staticData.repo),
 
-  help: (b, m) => b.reply(m, Object.keys(directCommands).map(c => '`' + c + '`').join(', '))
+  help: (b, m) => b.reply(m, Object.keys(directCommands || {}).map(c => '`' + c + '`').join(', '))
 }
 
 const ambientCommands = {
@@ -318,7 +329,7 @@ controller.hears(
     const text = message.text.toLowerCase()
 
     //Handle ambient commands
-    for(const c of Object.keys(ambientCommands)) {
+    for(const c of Object.keys(ambientCommands || {})) {
       if(text.startsWith(c)) {
         const textMinusCommand = text.slice(c.length).trim()
         ambientCommands[c](bot, message, textMinusCommand)
@@ -328,7 +339,7 @@ controller.hears(
 
     let didReply = false
     //Handle ambient listens
-    for(const l of Object.keys(storage.ambientListens)) {
+    for(const l of Object.keys(storage.ambientListens || {})) {
       if(text.indexOf(l) !== -1) {
         bot.reply(message, storage.ambientListens[l].response)
         didReply = true
@@ -349,7 +360,7 @@ controller.hears(
     if(shouldCheckCommandsAndListens) {
       if(textMinusBot.length > 0) {
         //Handle commands
-        for(const c of Object.keys(directCommands)) {
+        for(const c of Object.keys(directCommands || {})) {
           if(textMinusBot.startsWith(c)) {
             const textMinusCommand = textMinusBot.slice(c.length).trim()
             directCommands[c](bot, message, textMinusCommand)
@@ -358,7 +369,7 @@ controller.hears(
         }
 
         //Handle direct listens
-        for(const l of Object.keys(storage.directListens)) {
+        for(const l of Object.keys(storage.directListens || {})) {
           if(textMinusBot.startsWith(l)) {
             bot.reply(message, storage.directListens[l].response)
             return
