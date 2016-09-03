@@ -142,16 +142,16 @@ controller.spawn({
       text: randomInArray(greetz) + ' (`' + os.hostname() + '`)',
       channel: c.id
     }))
-  }
-})
 
-controller.createWebhookEndpoints(app)
-controller.createOauthEndpoints(app, function(err, req, res) {
-  if(err) {
-    res.status(500).send('ERROR: ' + err)
-  }
-  else {
-    res.send('Success!')
+    controller.createWebhookEndpoints(app)
+    controller.createOauthEndpoints(app, function(err2, req, res) {
+      if(err) {
+        res.status(500).send('ERROR: ' + err2)
+      }
+      else {
+        res.send('Success!')
+      }
+    })
   }
 })
 
