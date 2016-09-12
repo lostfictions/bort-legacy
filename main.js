@@ -101,7 +101,7 @@ const staticData = {
   watched: require('./data/watched.json'),
   vidlineVids: {}
 }
-for(const type of Object.keys(staticData.watched || {})) {
+for(const type of Object.keys(staticData.watched)) {
   staticData.watched[type].forEach(vid => { staticData.vidlineVids[vid] = type })
 }
 
@@ -121,7 +121,10 @@ const storageSchema = {
   }
 }
 
-const storage = {}
+const storage = {
+  ambientListens: {},
+  directListens: {}
+}
 
 let botName
 const users = {}
@@ -278,12 +281,12 @@ const directCommands = {
 
   list: (b, m) => b.reply(m,
     '*ASK ME ABOUT*:\n' +
-    Object.keys(storage.directListens || {})
+    Object.keys(storage.directListens)
       .map(kw =>
         `*${kw}*: set by *${storage.directListens[kw].user}* ${moment(storage.directListens[kw].created).fromNow()}`)
       .join('\n') +
     '\n\n*IF I HEAR EM*:\n' +
-    Object.keys(storage.ambientListens || {})
+    Object.keys(storage.ambientListens)
       .map(kw =>
         `*${kw}*: set by *${storage.ambientListens[kw].user}* ${moment(storage.ambientListens[kw].created).fromNow()}`)
       .join('\n')
@@ -297,7 +300,7 @@ const directCommands = {
 
   repo: (b, m) => b.reply(m, staticData.repo),
 
-  help: (b, m) => b.reply(m, Object.keys(directCommands || {}).map(c => '`' + c + '`').join(', '))
+  help: (b, m) => b.reply(m, Object.keys(directCommands).map(c => '`' + c + '`').join(', '))
 }
 
 const ambientCommands = {
@@ -336,7 +339,7 @@ controller.hears(
     const text = message.text.toLowerCase()
 
     //Handle ambient commands
-    for(const c of Object.keys(ambientCommands || {})) {
+    for(const c of Object.keys(ambientCommands)) {
       if(text.startsWith(c)) {
         const textMinusCommand = text.slice(c.length).trim()
         ambientCommands[c](bot, message, textMinusCommand)
@@ -346,7 +349,7 @@ controller.hears(
 
     let didReply = false
     //Handle ambient listens
-    for(const l of Object.keys(storage.ambientListens || {})) {
+    for(const l of Object.keys(storage.ambientListens)) {
       if(text.indexOf(l) !== -1) {
         bot.reply(message, storage.ambientListens[l].response)
         didReply = true
@@ -367,7 +370,7 @@ controller.hears(
     if(shouldCheckCommandsAndListens) {
       if(textMinusBot.length > 0) {
         //Handle commands
-        for(const c of Object.keys(directCommands || {})) {
+        for(const c of Object.keys(directCommands)) {
           if(textMinusBot.startsWith(c)) {
             const textMinusCommand = textMinusBot.slice(c.length).trim()
             directCommands[c](bot, message, textMinusCommand)
@@ -376,7 +379,7 @@ controller.hears(
         }
 
         //Handle direct listens
-        for(const l of Object.keys(storage.directListens || {})) {
+        for(const l of Object.keys(storage.directListens)) {
           if(textMinusBot.startsWith(l)) {
             bot.reply(message, storage.directListens[l].response)
             return
