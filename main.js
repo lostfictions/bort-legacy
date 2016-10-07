@@ -28,6 +28,11 @@ const Markov = require('./Markov')
 
 const convoMarkov = new Markov()
 
+const meanings = require('./data/tarot.json')
+for(const line of meanings) {
+  convoMarkov.add(line)
+}
+
 //Open a responder we can ping (via uptimerobot.com or similar) so the OpenShift app doesn't idle
 const app = require('express')()
 app.get('/', (req, res) => {
@@ -226,6 +231,29 @@ const directCommands = {
       delete storage.directListens[t]
       b.reply(m, `r i p ~${t}~`)
     }
+  },
+
+  busey: (b, m, t) => {
+    const letters = t.split('').filter(c => /[A-Za-z]/.test(c))
+    
+    const acro = []
+
+    let lastWord
+    for(const l of letters) {
+      let candidates
+
+      if(lastWord) {
+        candidates = Object.keys(convoMarkov.wordBank[lastWord]).filter(word => word.startsWith(l))
+      }
+
+      if(candidates == null || candidates.length === 0) {
+        candidates = Object.keys(convoMarkov.wordBank).filter(word => word.startsWith(l))
+      }
+
+      acro.push(randomInArray(candidates))
+    }
+
+    b.reply(m, acro.map(word => word[0].toUpperCase() + word.slice(1)).join(' '))
   },
 
   rhyme: (b, m, t) => {

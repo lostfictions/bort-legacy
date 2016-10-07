@@ -62,7 +62,7 @@ class MarkovChain {
   }
 
   endTest(sentence) {
-    return sentence.length > 7 && !continueSet.has(sentence[sentence.length - 1]) && Math.random() > 0.7
+    return sentence.length > 3 && !continueSet.has(sentence[sentence.length - 1]) && Math.random() > 0.8
   }
 
   get(seed = this.getSeed(this.wordBank)) {
